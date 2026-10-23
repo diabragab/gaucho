@@ -1,0 +1,53 @@
+# gaucho in the browser: server + android (redroid) + screen streaming (ws-scrcpy) + password gate (caddy).
+# Needs an ARM64 linux host (the client ships arm64-v8a only). Run deploy/setup.sh first.
+services:
+  gaucho:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    restart: unless-stopped
+    environment:
+      CQ2_BIND_HOST: 127.0.0.1
+      CQ2_GM: ${CQ2_GM:-}
+    volumes:
+      - gaucho-data:/data
+
+  # Runs in the gaucho container's network, so `adb reverse` lands on the server's localhost.
+  scrcpy:
+    build: ./scrcpy
+    restart: unless-stopped
+    network_mode: "service:gaucho"
+    depends_on: [gaucho, redroid]
+
+  redroid:
+    image: redroid/redroid:12.0.0_64only-latest
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - android-data:/data
+    command:
+      - androidboot.redroid_width=1280
+      - androidboot.redroid_height=720
+      - androidboot.redroid_dpi=240
+      - androidboot.redroid_fps=30
+      - androidboot.redroid_gpu_mode=${REDROID_GPU_MODE:-guest}
+
+  web:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      WEB_USER: ${WEB_USER:-admin}
+      WEB_PASS_HASH: ${WEB_PASS_HASH}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [gaucho]
+
+volumes:
+  gaucho-data:
+  android-data:
+  caddy-data:

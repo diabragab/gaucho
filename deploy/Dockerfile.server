@@ -1,0 +1,17 @@
+# gaucho server image: builds the rust binary, ships it with the data folder.
+FROM rust:1-bookworm AS build
+WORKDIR /src
+COPY rust/Cargo.toml rust/Cargo.lock ./
+COPY rust/src ./src
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=build /src/target/release/gaucho-server /app/gaucho-server
+COPY data /data-seed
+COPY deploy/server-entry.sh /app/server-entry.sh
+RUN chmod +x /app/server-entry.sh
+ENV CQ2_DATA=/data \
+    CQ2_BIND_HOST=127.0.0.1
+EXPOSE 8020 5816 9528
+ENTRYPOINT ["/app/server-entry.sh"]
